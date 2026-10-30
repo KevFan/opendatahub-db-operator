@@ -24,11 +24,15 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"math/big"
+	"net"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	. "github.com/onsi/gomega"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -86,6 +90,70 @@ func TestClient_Ping_WrongPassword(t *testing.T) {
 	err = cli.Ping(t.Context())
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(err).NotTo(MatchError(ContainSubstring(bad.Password.Reveal())))
+
+	// The server's rejection stays classifiable after projection.
+	var safe *SafeError
+	g.Expect(errors.As(err, &safe)).To(BeTrue())
+	g.Expect(safe.RetryClass()).To(Equal(RetryNone))
+	g.Expect(IsPgError(err, pgerrcode.InvalidPassword)).To(BeTrue(), "SQLSTATE survives projection")
+	g.Expect(err.Error()).To(ContainSubstring("ping failed"))
+}
+
+// TestClient_ExecProjectsServerError keeps a real statement rejection
+// recognizable by SQLSTATE, and exact: undefined_table is not undefined_object.
+func TestClient_ExecProjectsServerError(t *testing.T) {
+	g := NewWithT(t)
+	cfg := startPingPostgres(t)
+
+	cli, err := NewClient(t.Context(), cfg)
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(cli.Close)
+
+	_, err = cli.Exec(t.Context(), "SELECT * FROM client_api_missing_table")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(IsPgError(err, pgerrcode.UndefinedTable)).To(BeTrue())
+	g.Expect(IsUndefinedObject(err)).To(BeFalse(), "classification does not blur into a neighbouring code")
+	g.Expect(err.Error()).To(ContainSubstring("client_api_missing_table"))
+	g.Expect(err.Error()).NotTo(ContainSubstring(cfg.Password.Reveal()))
+
+	// QueryRow defers the server error until Scan; it must be projected too.
+	row, err := cli.QueryRow(t.Context(), "SELECT * FROM client_api_missing_table")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var value int
+	g.Expect(IsPgError(row.Scan(&value), pgerrcode.UndefinedTable)).To(BeTrue())
+}
+
+// TestClient_ExecPasswordStatementRendersNoSecret runs the statement shape ddl.go
+// builds: the password travels as a SQL literal, the server rejects the
+// statement, and the projected error keeps neither the literal nor a raw cause.
+func TestClient_ExecPasswordStatementRendersNoSecret(t *testing.T) {
+	g := NewWithT(t)
+	cfg := startPingPostgres(t)
+
+	cli, err := NewClient(t.Context(), cfg)
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(cli.Close)
+
+	password := secret.FromString(quotingPasswordSentinel)
+	literal := QuoteLiteral(password.Reveal())
+	// The server quotes the literal it was given back into the message, the way
+	// a statement-derived diagnostic can.
+	statement := fmt.Sprintf(
+		`DO $$ BEGIN RAISE EXCEPTION 'role creation failed for %%', %s; END $$`,
+		literal,
+	)
+
+	_, err = cli.Exec(withQuerySecrets(t.Context(), password), statement)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(IsPgError(err, pgerrcode.RaiseException)).To(BeTrue())
+	g.Expect(err.Error()).To(ContainSubstring("role creation failed"))
+	g.Expect(err.Error()).To(ContainSubstring("[REDACTED]"))
+	g.Expect(err.Error()).NotTo(ContainSubstring(password.Reveal()))
+	g.Expect(err.Error()).NotTo(ContainSubstring(literal))
+
+	var pgErr *pgconn.PgError
+	g.Expect(errors.As(err, &pgErr)).To(BeFalse(), "the driver error, with its InternalQuery, is not reachable")
 }
 
 func TestNewClient_UnreachableHostTimesOut(t *testing.T) {
@@ -111,6 +179,91 @@ func TestNewClient_UnreachableHostTimesOut(t *testing.T) {
 		ContainSubstring("timeout"),
 		ContainSubstring("deadline exceeded"),
 	))
+}
+
+// closedPort returns a loopback port nothing is listening on, so a dial fails
+// with ECONNREFUSED the way it does against a restarting server.
+func closedPort(t *testing.T) int {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserving a port: %v", err)
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatalf("closing the reserved port: %v", err)
+	}
+
+	return port
+}
+
+// TestClientPing_ConnectionRefusedProjectsSafeError covers the classification a
+// reconciler acts on: a refused connection stays recognizable as retryable after
+// the driver error is projected, and the message names no credential.
+func TestClientPing_ConnectionRefusedProjectsSafeError(t *testing.T) {
+	g := NewWithT(t)
+
+	cfg := Config{
+		Host:     "127.0.0.1",
+		Port:     closedPort(t),
+		User:     "admin",
+		Password: secret.FromString(quotingPasswordSentinel),
+		DBName:   "postgres",
+		SSLMode:  SSLModeDisable,
+	}
+
+	cli, err := NewClient(t.Context(), cfg)
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(cli.Close)
+
+	err = cli.Ping(t.Context())
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(RetryClassOf(err)).To(Equal(RetryQuick))
+	g.Expect(err.Error()).To(ContainSubstring("connection refused"))
+	g.Expect(err.Error()).NotTo(ContainSubstring(quotingPasswordSentinel))
+
+	var safe *SafeError
+	g.Expect(errors.As(err, &safe)).To(BeTrue())
+	g.Expect(safe.SQLState()).To(BeEmpty(), "the failure never reached the server")
+	g.Expect(safe.RetryClass()).To(Equal(RetryQuick))
+
+	// Exec and QueryRow fail the same way and must classify alike.
+	_, err = cli.Exec(t.Context(), "SELECT 1")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(RetryClassOf(err)).To(Equal(RetryQuick))
+	g.Expect(err.Error()).To(ContainSubstring("executing statement failed"))
+
+	row, err := cli.QueryRow(t.Context(), "SELECT 1")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var one int
+	g.Expect(RetryClassOf(row.Scan(&one))).To(Equal(RetryQuick))
+}
+
+// TestNewClient_InvalidTLSProfileProjectsSafeError covers the pool-open path: a
+// config that cannot become a pool still returns a credential-free SafeError.
+func TestNewClient_InvalidTLSProfileProjectsSafeError(t *testing.T) {
+	g := NewWithT(t)
+
+	_, err := NewClient(t.Context(), Config{
+		Host:        "db.example.test",
+		Port:        5432,
+		User:        "admin",
+		Password:    secret.FromString(quotingPasswordSentinel),
+		DBName:      "postgres",
+		SSLMode:     SSLModeVerifyFull,
+		SSLRootCert: "not a certificate",
+	})
+
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("building pool config failed"))
+	g.Expect(err.Error()).NotTo(ContainSubstring(quotingPasswordSentinel))
+	g.Expect(RetryClassOf(err)).To(Equal(RetryNone))
+
+	var safe *SafeError
+	g.Expect(errors.As(err, &safe)).To(BeTrue())
 }
 
 func TestNewClient_ExecQueryAndQueryRow(t *testing.T) {

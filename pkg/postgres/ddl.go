@@ -200,7 +200,9 @@ func DropSchemaCascade(ctx context.Context, cli Client, schema string) error {
 // alters an existing role's password. Use SetRolePassword for explicit rotation.
 // Concurrent creates that lose the race on DuplicateObject are treated as success.
 func EnsureRole(ctx context.Context, cli Client, role string, password secret.SecretString) error {
-	// The pool tracer reads this context and redacts the literal built below.
+	// The statement holds the password as a literal: the pool tracer redacts it
+	// from traces, and Client error projection redacts it from driver text that
+	// quotes the statement back.
 	ctx = withQuerySecrets(ctx, password)
 	stmt := fmt.Sprintf(sqlEnsureRole,
 		QuoteLiteral(role),
@@ -218,7 +220,7 @@ func EnsureRole(ctx context.Context, cli Client, role string, password secret.Se
 // that use the old credentials. Only call this when a credentials Secret has been
 // lost and an explicit rotation is required to restore a known-good state.
 func SetRolePassword(ctx context.Context, cli Client, role string, password secret.SecretString) error {
-	// The pool tracer reads this context and redacts the literal built below.
+	// Same two consumers as EnsureRole: trace rendering and error projection.
 	ctx = withQuerySecrets(ctx, password)
 	_, err := cli.Exec(ctx, fmt.Sprintf(sqlSetRolePassword, QuoteIdentifier(role), QuoteLiteral(password.Reveal())))
 	return err

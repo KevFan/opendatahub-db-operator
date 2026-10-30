@@ -127,10 +127,7 @@ func OpenClient(
 	}
 	dbClient, err := factory(ctx, providerCfg)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"opening postgres client: %w",
-			postgres.SanitizeError(err, providerCfg.Password.Reveal()),
-		)
+		return nil, fmt.Errorf("opening postgres client: %w", err)
 	}
 	return dbClient, nil
 }
@@ -280,6 +277,11 @@ func ClearRoleOwnershipInDatabase(
 	dbCfg.DBName = database
 	dbClient, err := OpenClient(ctx, dbCfg, factory)
 	if err != nil {
+		if postgres.IsInvalidCatalogName(err) {
+			// The database went away between the check above and this open.
+			return nil
+		}
+
 		return fmt.Errorf("opening postgres client for database %q: %w", database, err)
 	}
 	defer dbClient.Close()

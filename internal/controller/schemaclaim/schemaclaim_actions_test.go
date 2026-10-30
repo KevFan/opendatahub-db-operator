@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	. "github.com/onsi/gomega"
@@ -252,6 +253,38 @@ func TestCleanupAction_MissingDatabaseStillDropsRole(t *testing.T) {
 	err := newCleanupController(pg).cleanupAction(
 		context.Background(),
 		claimTestRequest(t, fakeCleanupClient(t, provider, secret, claim), claim),
+	)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pg.droppedRoles).To(ContainElement(role))
+}
+
+// TestCleanupAction_DatabaseDroppedAtOpenStillDropsRole covers the race the
+// invalid_catalog_name fallback exists for: DatabaseExists saw the database, but
+// the client for it fails to open because the database is gone. Cleanup must
+// read that as "nothing left inside it" — the SQLSTATE has to survive the
+// boundary, which is why Client errors are projected rather than re-rendered.
+func TestCleanupAction_DatabaseDroppedAtOpenStillDropsRole(t *testing.T) {
+	g := NewWithT(t)
+	claim, provider, adminSecret := cleanupFixtures()
+	role := dbcontroller.RoleNameForSchemaClaim(claim.Namespace, claim.Name)
+	pg := &cleanupPG{databases: map[string]bool{"analytics": true}, roles: map[string]bool{role: true}}
+
+	ctrl := &Controller{Options: Options{
+		cfg: &moduleconfig.Config{OperatorNamespace: "odh-db-operator-system"},
+		PostgresClientFactory: func(_ context.Context, cfg postgres.Config) (postgres.Client, error) {
+			if cfg.DBName == "analytics" {
+				return nil, postgres.ProjectError("ping", &pgconn.PgError{
+					Code:    pgerrcode.InvalidCatalogName,
+					Message: `database "analytics" does not exist`,
+				})
+			}
+			return pg, nil
+		},
+	}}
+
+	err := ctrl.cleanupAction(
+		context.Background(),
+		claimTestRequest(t, fakeCleanupClient(t, provider, adminSecret, claim), claim),
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(pg.droppedRoles).To(ContainElement(role))

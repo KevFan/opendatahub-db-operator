@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	. "github.com/onsi/gomega"
@@ -82,6 +83,33 @@ func TestNewClient_LoadsProviderConfigAndUsesFactory(t *testing.T) {
 	}))
 	g.Expect(gotConfig).To(Equal(cfg))
 	g.Expect(client.Config()).To(Equal(cfg))
+}
+
+// TestOpenClient_KeepsProjectedFailureClassification covers the cleanup fallback
+// for a database that disappears mid-flight: the SQLSTATE must survive this
+// helper's wrapping, because that is what tells schemaclaim cleanup to treat the
+// database as already gone instead of failing the deletion.
+func TestOpenClient_KeepsProjectedFailureClassification(t *testing.T) {
+	g := NewWithT(t)
+
+	projected := postgres.ProjectError(
+		"ping",
+		&pgconn.PgError{Code: pgerrcode.InvalidCatalogName, Message: `database "analytics" does not exist`},
+		secretvalue.FromString("admin-password"),
+	)
+
+	_, err := controller.OpenClient(
+		context.Background(),
+		postgres.Config{DBName: "analytics"},
+		func(context.Context, postgres.Config) (postgres.Client, error) {
+			return nil, projected
+		},
+	)
+
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(postgres.IsInvalidCatalogName(err)).To(BeTrue(), "the cleanup fallback depends on this")
+	g.Expect(err.Error()).To(ContainSubstring("analytics"))
+	g.Expect(err.Error()).NotTo(ContainSubstring("admin-password"))
 }
 
 type stubClient struct {
