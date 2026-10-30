@@ -25,6 +25,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net/url"
 	"testing"
 	"time"
 
@@ -187,6 +188,7 @@ func TestPoolConfigFor_ConfiguresVerifyFullFromCAData(t *testing.T) {
 	g.Expect(poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify).To(BeFalse())
 	g.Expect(poolConfig.ConnConfig.TLSConfig.VerifyPeerCertificate).To(BeNil())
 	g.Expect(poolConfig.ConnConfig.TLSConfig.ServerName).To(Equal("db.example.test"))
+	g.Expect(poolConfig.ConnConfig.Password).To(Equal("secret"))
 }
 
 func TestPoolConfigFor_ConfiguresVerifyCAFromCAData(t *testing.T) {
@@ -227,21 +229,87 @@ func TestPoolConfigFor_RejectsInvalidCAData(t *testing.T) {
 
 // TestPoolConfigFor_CarriesPasswordToPgx pins the password boundary for the
 // DSN: DSN() omits the credential, so the pool config must receive it from the
-// wrapper or connections cannot authenticate.
+// wrapper or connections cannot authenticate. pgx v5 keeps no connection string
+// on ConnConfig, so DSN() is the only rendered connection string on this path.
 func TestPoolConfigFor_CarriesPasswordToPgx(t *testing.T) {
 	g := NewWithT(t)
+	const password = "boundary-sentinel-password"
 
-	poolConfig, err := poolConfigFor(Config{
+	cfg := Config{
 		Host:     "db.example.test",
 		Port:     5432,
 		User:     "user",
-		Password: secret.FromString("boundary-sentinel-password"),
+		Password: secret.FromString(password),
 		DBName:   "db",
 		SSLMode:  SSLModeDisable,
-	})
+	}
+
+	poolConfig, err := poolConfigFor(cfg)
 
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(poolConfig.ConnConfig.Password).To(Equal("boundary-sentinel-password"))
+	g.Expect(poolConfig.ConnConfig.Password).To(Equal(password))
+	g.Expect(poolConfig.ConnConfig.Host).To(Equal(cfg.Host))
+	g.Expect(poolConfig.ConnConfig.Port).To(Equal(uint16(cfg.Port)))
+	g.Expect(poolConfig.ConnConfig.User).To(Equal(cfg.User))
+	g.Expect(poolConfig.ConnConfig.Database).To(Equal(cfg.DBName))
+
+	dsn := cfg.DSN()
+	g.Expect(dsn).NotTo(ContainSubstring(password))
+	g.Expect(dsn).NotTo(ContainSubstring(url.QueryEscape(password)))
+	dsnURL, err := url.Parse(dsn)
+	g.Expect(err).NotTo(HaveOccurred())
+	_, dsnHasPassword := dsnURL.User.Password()
+	g.Expect(dsnHasPassword).To(BeFalse())
+}
+
+// TestPoolConfigFor_SentinelPasswordStaysOutOfRenderedText uses a password that
+// needs URL quoting so a leak through the connection string or a construction
+// error would show up as the encoded or raw literal.
+func TestPoolConfigFor_SentinelPasswordStaysOutOfRenderedText(t *testing.T) {
+	const password = "pa:ss@word/with?reserved&chars#1"
+
+	baseConfig := func() Config {
+		return Config{
+			Host:     "db.example.test",
+			Port:     5432,
+			User:     "user",
+			Password: secret.FromString(password),
+			DBName:   "db",
+			SSLMode:  SSLModeVerifyFull,
+		}
+	}
+
+	t.Run("connection-string", func(t *testing.T) {
+		g := NewWithT(t)
+		cfg := baseConfig()
+		cfg.SSLMode = SSLModeDisable
+
+		poolConfig, err := poolConfigFor(cfg)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(poolConfig.ConnConfig.Password).To(Equal(password))
+		g.Expect(cfg.DSN()).NotTo(ContainSubstring(password))
+		dsnURL, err := url.Parse(cfg.DSN())
+		g.Expect(err).NotTo(HaveOccurred())
+		_, dsnHasPassword := dsnURL.User.Password()
+		g.Expect(dsnHasPassword).To(BeFalse())
+	})
+
+	t.Run("construction-errors", func(t *testing.T) {
+		g := NewWithT(t)
+		cfg := baseConfig()
+		cfg.SSLRootCert = "not a pem bundle"
+
+		_, poolConfigErr := poolConfigFor(cfg)
+
+		g.Expect(poolConfigErr).To(MatchError(ContainSubstring("unable to add CA to cert pool")))
+		g.Expect(poolConfigErr.Error()).NotTo(ContainSubstring(password))
+
+		_, clientErr := NewClient(t.Context(), cfg)
+
+		g.Expect(clientErr).To(MatchError(ContainSubstring("building pool config")))
+		g.Expect(clientErr.Error()).NotTo(ContainSubstring(password))
+	})
 }
 
 func testRootCA(t *testing.T) []byte {

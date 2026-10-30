@@ -227,7 +227,7 @@ func TestReconcileExternalActionRedactsPasswordFromConnectionFailure(t *testing.
 	g.Expect(m.reconcileExternalAction(context.Background(), rr)).To(Succeed())
 	reachable := conditions.FindStatusCondition(provider, ConditionReachable)
 	g.Expect(reachable).NotTo(BeNil())
-	g.Expect(reachable.Message).To(ContainSubstring("[redacted]"))
+	g.Expect(reachable.Message).To(ContainSubstring("[REDACTED]"))
 	g.Expect(reachable.Message).NotTo(ContainSubstring(string(secret.Data[postgres.SecretKeyPassword])))
 }
 
@@ -518,7 +518,7 @@ func TestInternalReadinessRejectsUnusableAdminSecret(t *testing.T) {
 	reachable := conditions.FindStatusCondition(provider, ConditionReachable)
 	g.Expect(reachable.Status).To(Equal(metav1.ConditionFalse))
 	g.Expect(reachable.Reason).To(Equal("AdminConnectionFailed"))
-	g.Expect(reachable.Message).To(ContainSubstring("[redacted]"))
+	g.Expect(reachable.Message).To(ContainSubstring("[REDACTED]"))
 	g.Expect(reachable.Message).NotTo(ContainSubstring("new-password"))
 }
 

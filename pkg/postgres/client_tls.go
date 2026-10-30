@@ -26,13 +26,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// poolConfigFor builds the pgx pool configuration for cfg. It is the pgx
+// boundary for credential material: pgx keeps the password as a plain string in
+// ConnConfig, so this assignment is the only reveal that hands the credential
+// to pgx and
+// every caller passes the wrapped Config instead of revealing it first.
 func poolConfigFor(cfg Config) (*pgxpool.Config, error) {
 	poolConfig, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("parsing DSN: %w", err)
 	}
-	// TODO(RHOAIENG-100934 Phase 2: pool config boundary): hand the credential
-	// to pgx without revealing it into a plain string here.
 	poolConfig.ConnConfig.Password = cfg.Password.Reveal()
 	if err := applyRuntimeTLSConfig(
 		poolConfig.ConnConfig,
