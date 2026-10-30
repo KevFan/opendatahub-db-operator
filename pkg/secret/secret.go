@@ -56,8 +56,8 @@ func (s SecretString) IsZero() bool {
 
 // Reveal returns the plaintext for the sink that requires it.
 //
-// shortcut: Reveal() is conventionally-guarded only; an allowlist test lands
-// with RHOAIENG-100934 Phase 5.
+// Call sites are held to the inventory in allowlist_test.go; adding one needs a
+// security review of the sink.
 func (s SecretString) Reveal() string {
 	return s.s
 }
