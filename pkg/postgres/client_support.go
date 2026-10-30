@@ -27,7 +27,7 @@ func sanitize(err error, password string) error {
 	if err == nil || password == "" {
 		return err
 	}
-	safe := strings.ReplaceAll(err.Error(), password, "[REDACTED]")
+	safe := strings.ReplaceAll(err.Error(), password, redactedValue)
 	return fmt.Errorf("%s", safe) //nolint:goerr113 // error is sanitized, not wrapped
 }
 

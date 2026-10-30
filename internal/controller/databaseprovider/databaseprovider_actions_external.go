@@ -47,6 +47,7 @@ func (m *Controller) reconcileExternalAction(ctx context.Context, rr *odhtypes.R
 		reportExternalConfigFailure(rr, obj, err)
 		return nil
 	}
+	cfg = m.cfg.WithPostgresTracing(cfg)
 	obj.Status.Connection = providerConnectionStatus(cfg)
 	obj.Status.TLS = &infraApi.ProviderTLSStatus{Enabled: cfg.TLSEnabled(), Ready: cfg.TLSReady()}
 	if err := configureExternalTLS(ctx, rr, &cfg); err != nil {

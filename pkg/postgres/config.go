@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/go-logr/logr"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -81,6 +82,14 @@ type Config struct {
 	SSLRootCert      string            `mapstructure:"ca.crt"`
 	SSLMode          string            `mapstructure:"sslmode"`
 	TLSConfigMutator func(*tls.Config) `mapstructure:"-"`
+	// Logger receives this connection's pgx trace events. It never comes from a
+	// Secret: the controller layer copies it from the operator logger, and a
+	// zero Logger discards trace output.
+	Logger logr.Logger `mapstructure:"-"`
+	// TraceQueries promotes pgx trace output from database errors to every
+	// statement. The controller layer sets it from the operator log level, so a
+	// production operator does not log each statement it issues.
+	TraceQueries bool `mapstructure:"-"`
 }
 
 func (c Config) TLSEnabled() bool {

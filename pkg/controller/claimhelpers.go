@@ -112,6 +112,7 @@ func NewClient(
 	if err != nil {
 		return nil, postgres.Config{}, err
 	}
+	providerCfg = cfg.WithPostgresTracing(providerCfg)
 	dbClient, err := OpenClient(ctx, providerCfg, factory)
 	return dbClient, providerCfg, err
 }

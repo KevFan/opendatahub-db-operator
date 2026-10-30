@@ -24,6 +24,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/tracelog"
 )
 
 // poolConfigFor builds the pgx pool configuration for cfg. It is the pgx
@@ -37,6 +38,12 @@ func poolConfigFor(cfg Config) (*pgxpool.Config, error) {
 		return nil, fmt.Errorf("parsing DSN: %w", err)
 	}
 	poolConfig.ConnConfig.Password = cfg.Password.Reveal()
+	// tracelog emits statement text at Info and pool acquire/release at Debug,
+	// so the operator's redaction sits in front of every level it enables.
+	poolConfig.ConnConfig.Tracer = &tracelog.TraceLog{
+		Logger:   newRedactingTraceLogger(cfg.Password, cfg.traceLogger()),
+		LogLevel: cfg.traceLogLevel(),
+	}
 	if err := applyRuntimeTLSConfig(
 		poolConfig.ConnConfig,
 		cfg.SSLMode,

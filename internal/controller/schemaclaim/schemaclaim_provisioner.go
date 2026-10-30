@@ -30,6 +30,7 @@ import (
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/controller/claimerrors"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/resources/gvk"
+	odhsecret "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 // SchemaProvisioner provisions a dedicated schema and login role for a SchemaClaim.
@@ -123,13 +124,13 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 		if err != nil {
 			return nil, fmt.Errorf("generating password: %w", err)
 		}
-		if err := postgres.EnsureRole(ctx, p.Postgres, role, pw); err != nil {
+		if err := postgres.EnsureRole(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("creating role", err)
 		}
 		// EnsureRole is create-only: a concurrent create that loses on
 		// DuplicateObject leaves the winner's password on the role. Force the
 		// role to this reconcile's password so the Secret cannot diverge.
-		if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
+		if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("setting role password", err)
 		}
 		dbcontroller.ApplySchemaClaimCredentials(secret, p.ProviderConfig, role, pw, database, schema, p.Claim.UID)
@@ -139,7 +140,7 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 		if err != nil {
 			return nil, fmt.Errorf("generating password: %w", err)
 		}
-		if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
+		if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("rotating role password", err)
 		}
 		dbcontroller.ApplySchemaClaimCredentials(secret, p.ProviderConfig, role, pw, database, schema, p.Claim.UID)
@@ -155,7 +156,7 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 			if genErr != nil {
 				return nil, fmt.Errorf("generating password: %w", genErr)
 			}
-			if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
+			if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
 				return nil, dbcontroller.WrapQuickRetry("rotating role password", err)
 			}
 			existingPassword = pw
