@@ -77,7 +77,7 @@ func (c *pgxClient) Ping(ctx context.Context) error {
 		return fmt.Errorf("postgres client is not open")
 	}
 
-	return sanitize(c.pool.Ping(ctx), c.config.Password)
+	return sanitize(c.pool.Ping(ctx), c.config.Password.Reveal())
 }
 
 func (c *pgxClient) Exec(
@@ -119,12 +119,12 @@ func (c *pgxClient) QueryRow(
 func openPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	poolConfig, err := poolConfigFor(cfg)
 	if err != nil {
-		return nil, sanitize(fmt.Errorf("building pool config: %w", err), cfg.Password)
+		return nil, sanitize(fmt.Errorf("building pool config: %w", err), cfg.Password.Reveal())
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		return nil, sanitize(fmt.Errorf("opening pool: %w", err), cfg.Password)
+		return nil, sanitize(fmt.Errorf("opening pool: %w", err), cfg.Password.Reveal())
 	}
 
 	return pool, nil

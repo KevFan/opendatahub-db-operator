@@ -24,6 +24,7 @@ import (
 
 	infraApi "github.com/opendatahub-io/opendatahub-db-operator/api/infrastructure/v1alpha1"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
+	"github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func openPool(t *testing.T, cfg postgres.Config) postgres.Client {
@@ -93,7 +94,7 @@ func TestDDL_EnsureDropRole(t *testing.T) {
 	// Verify the role can actually connect
 	roleCfg := postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: "testrole", Password: pw, DBName: cfg.DBName,
+		User: "testrole", Password: secret.FromString(pw), DBName: cfg.DBName,
 	}
 	roleClient := openPool(t, roleCfg)
 	g.Expect(roleClient.Ping(ctx)).To(Succeed())
@@ -126,7 +127,7 @@ func TestDDL_ClaimCleanupDropsRoleWithOwnedObjects(t *testing.T) {
 
 	roleCfg := postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: pw, DBName: cfg.DBName,
+		User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
 	}
 	roleClient := openPool(t, roleCfg)
 	_, err = roleClient.Exec(ctx, fmt.Sprintf("CREATE SCHEMA %s", postgres.QuoteIdentifier("owned_schema")))
@@ -166,7 +167,7 @@ func TestDDL_DropRoleTerminatesActiveSessions(t *testing.T) {
 
 	live := openPool(t, postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: pw, DBName: cfg.DBName,
+		User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
 	})
 	g.Expect(live.Ping(ctx)).To(Succeed())
 
@@ -200,7 +201,7 @@ func TestDDL_DropDatabaseWithActiveSession(t *testing.T) {
 
 	live := openPool(t, postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: pw, DBName: dbName,
+		User: role, Password: secret.FromString(pw), DBName: dbName,
 	})
 	g.Expect(live.Ping(ctx)).To(Succeed())
 
@@ -257,7 +258,7 @@ func TestDDL_GrantSchemaPrivileges(t *testing.T) {
 
 			roleCfg := postgres.Config{
 				Host: cfg.Host, Port: cfg.Port,
-				User: role, Password: pw, DBName: cfg.DBName,
+				User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
 			}
 			rolePool, err := postgres.NewClient(ctx, roleCfg)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -332,7 +333,7 @@ func TestDDL_GrantDatabasePrivileges(t *testing.T) {
 				Host:     cfg.Host,
 				Port:     cfg.Port,
 				User:     role,
-				Password: password,
+				Password: secret.FromString(password),
 				DBName:   cfg.DBName,
 			}
 			rolePool, err := postgres.NewClient(ctx, roleCfg)

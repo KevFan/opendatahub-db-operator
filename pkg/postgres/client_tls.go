@@ -31,6 +31,9 @@ func poolConfigFor(cfg Config) (*pgxpool.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing DSN: %w", err)
 	}
+	// TODO(RHOAIENG-100934 Phase 2: pool config boundary): hand the credential
+	// to pgx without revealing it into a plain string here.
+	poolConfig.ConnConfig.Password = cfg.Password.Reveal()
 	if err := applyRuntimeTLSConfig(
 		poolConfig.ConnConfig,
 		cfg.SSLMode,

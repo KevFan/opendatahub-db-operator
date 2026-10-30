@@ -31,6 +31,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	. "github.com/onsi/gomega"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+
+	"github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func startPingPostgres(t *testing.T) Config {
@@ -74,7 +76,7 @@ func TestClient_Ping_WrongPassword(t *testing.T) {
 	cfg := startPingPostgres(t)
 
 	bad := cfg
-	bad.Password = "totally-wrong-password-sentinel"
+	bad.Password = secret.FromString("totally-wrong-password-sentinel")
 
 	cli, err := NewClient(t.Context(), bad)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -82,7 +84,7 @@ func TestClient_Ping_WrongPassword(t *testing.T) {
 
 	err = cli.Ping(t.Context())
 	g.Expect(err).To(HaveOccurred())
-	g.Expect(err).NotTo(MatchError(ContainSubstring(bad.Password)))
+	g.Expect(err).NotTo(MatchError(ContainSubstring(bad.Password.Reveal())))
 }
 
 func TestNewClient_UnreachableHostTimesOut(t *testing.T) {
@@ -95,7 +97,7 @@ func TestNewClient_UnreachableHostTimesOut(t *testing.T) {
 		Host:     "203.0.113.1",
 		Port:     5432,
 		User:     "user",
-		Password: "secret",
+		Password: secret.FromString("secret"),
 		DBName:   "db",
 	})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -173,7 +175,7 @@ func TestPoolConfigFor_ConfiguresVerifyFullFromCAData(t *testing.T) {
 		Host:        "db.example.test",
 		Port:        5432,
 		User:        "user",
-		Password:    "secret",
+		Password:    secret.FromString("secret"),
 		DBName:      "db",
 		SSLMode:     SSLModeVerifyFull,
 		SSLRootCert: string(testRootCA(t)),
@@ -194,7 +196,7 @@ func TestPoolConfigFor_ConfiguresVerifyCAFromCAData(t *testing.T) {
 		Host:        "db.example.test",
 		Port:        5432,
 		User:        "user",
-		Password:    "secret",
+		Password:    secret.FromString("secret"),
 		DBName:      "db",
 		SSLMode:     SSLModeVerifyCA,
 		SSLRootCert: string(testRootCA(t)),
@@ -214,13 +216,32 @@ func TestPoolConfigFor_RejectsInvalidCAData(t *testing.T) {
 		Host:        "db.example.test",
 		Port:        5432,
 		User:        "user",
-		Password:    "secret",
+		Password:    secret.FromString("secret"),
 		DBName:      "db",
 		SSLMode:     SSLModeVerifyFull,
 		SSLRootCert: "not a pem bundle",
 	})
 
 	g.Expect(err).To(MatchError(ContainSubstring("unable to add CA to cert pool")))
+}
+
+// TestPoolConfigFor_CarriesPasswordToPgx pins the password boundary for the
+// DSN: DSN() omits the credential, so the pool config must receive it from the
+// wrapper or connections cannot authenticate.
+func TestPoolConfigFor_CarriesPasswordToPgx(t *testing.T) {
+	g := NewWithT(t)
+
+	poolConfig, err := poolConfigFor(Config{
+		Host:     "db.example.test",
+		Port:     5432,
+		User:     "user",
+		Password: secret.FromString("boundary-sentinel-password"),
+		DBName:   "db",
+		SSLMode:  SSLModeDisable,
+	})
+
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(poolConfig.ConnConfig.Password).To(Equal("boundary-sentinel-password"))
 }
 
 func testRootCA(t *testing.T) []byte {

@@ -224,7 +224,7 @@ func (m *Controller) internalReadinessAction(
 			conditions.WithReason("AdminConnectionFailed"),
 			conditions.WithMessagef(
 				"Internal PostgreSQL admin connection failed: %s. Verify the admin Secret, TLS, and network access.",
-				postgres.SanitizeError(err, cfg.Password),
+				postgres.SanitizeError(err, cfg.Password.Reveal()),
 			))
 		return nil
 	}

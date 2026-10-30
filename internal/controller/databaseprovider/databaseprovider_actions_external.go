@@ -145,7 +145,7 @@ func (m *Controller) markConnectionFailure(
 	cfg postgres.Config,
 	err error,
 ) error {
-	err = postgres.SanitizeError(err, cfg.Password)
+	err = postgres.SanitizeError(err, cfg.Password.Reveal())
 	obj.Status.ServerVersion = ""
 	dbmetrics.ClearProviderServerVersion(obj.Name)
 	rr.Conditions.Mark(ConditionServerVersion, metav1.ConditionUnknown,

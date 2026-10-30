@@ -128,7 +128,7 @@ func OpenClient(
 	if err != nil {
 		return nil, fmt.Errorf(
 			"opening postgres client: %w",
-			postgres.SanitizeError(err, providerCfg.Password),
+			postgres.SanitizeError(err, providerCfg.Password.Reveal()),
 		)
 	}
 	return dbClient, nil

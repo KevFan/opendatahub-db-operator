@@ -22,6 +22,7 @@ import (
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/controller"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/controller/claimerrors"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
+	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func TestNewClient_LoadsProviderConfigAndUsesFactory(t *testing.T) {
@@ -75,7 +76,7 @@ func TestNewClient_LoadsProviderConfigAndUsesFactory(t *testing.T) {
 		Host:     "postgres.db-admin.svc",
 		Port:     postgres.DefaultPort,
 		User:     "postgres",
-		Password: "secret",
+		Password: secretvalue.FromString("secret"),
 		DBName:   "postgres",
 		SSLMode:  postgres.SSLModeRequire,
 	}))
