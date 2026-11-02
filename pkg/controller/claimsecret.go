@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	fwapi "github.com/opendatahub-io/odh-platform-utilities/framework/api"
-	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/resources/gvk"
+	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 // CredentialStampAnnotation carries a hash of (claim UID, role, password)

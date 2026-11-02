@@ -204,17 +204,8 @@ func TestDatabaseServiceAggregatesProviderStatus(t *testing.T) {
 				Message:  "PostgreSQL 12.0 is outside the tested range (13 through 17); connections and claims remain allowed",
 			},
 		}
-<<<<<<< HEAD
-		// The provider controller's own status writes race this update, so
-		// re-read and retry on conflict instead of failing the subtest.
-		g.Eventually(func(g Gomega) {
-			g.Expect(cli.Get(ctx, client.ObjectKeyFromObject(provider), provider)).To(Succeed())
-			provider.Status.Conditions = outOfRange
-			g.Expect(cli.Status().Update(ctx, provider)).To(Succeed())
-		}).WithTimeout(time.Minute).Should(Succeed())
-=======
+		provider.Status.Conditions = outOfRange
 		updateProviderStatus(g, ctx, cli, provider)
->>>>>>> 0b0172f (test(databaseserviceaggregation): retry provider status writes on informer-cache lag)
 		triggerServiceReconcile(t, ctx, cli, service)
 
 		eventuallyService(t, ctx, cli, service, func(g Gomega, got *servicesv1alpha1.DatabaseService) {

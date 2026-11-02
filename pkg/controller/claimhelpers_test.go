@@ -122,7 +122,7 @@ func (stubClient) Ping(context.Context) error { return nil }
 func (stubClient) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil
 }
-func (stubClient) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (stubClient) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, nil
 }
 func (stubClient) QueryRow(context.Context, string, ...any) (pgx.Row, error) {
@@ -262,7 +262,7 @@ func (c *recordingClient) Exec(_ context.Context, sql string, _ ...any) (pgconn.
 	c.execSQLs = append(c.execSQLs, sql)
 	return pgconn.CommandTag{}, nil
 }
-func (c *recordingClient) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (c *recordingClient) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, nil
 }
 func (c *recordingClient) QueryRow(_ context.Context, _ string, args ...any) (pgx.Row, error) {

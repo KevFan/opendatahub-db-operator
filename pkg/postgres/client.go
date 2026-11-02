@@ -35,8 +35,20 @@ type Client interface {
 	Close()
 	Ping(ctx context.Context) error
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Query(ctx context.Context, sql string, args ...any) (Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) (pgx.Row, error)
+}
+
+// Rows exposes pgx query results without exposing the underlying connection.
+type Rows interface {
+	Close()
+	Err() error
+	CommandTag() pgconn.CommandTag
+	FieldDescriptions() []pgconn.FieldDescription
+	Next() bool
+	Scan(dest ...any) error
+	Values() ([]any, error)
+	RawValues() [][]byte
 }
 
 type pgxClient struct {
@@ -105,7 +117,7 @@ func (c *pgxClient) Query(
 	ctx context.Context,
 	sql string,
 	args ...any,
-) (pgx.Rows, error) {
+) (Rows, error) {
 	if c == nil || c.pool == nil {
 		return nil, fmt.Errorf("postgres client is not open")
 	}
@@ -141,10 +153,10 @@ func (c *pgxClient) boundarySecrets(ctx context.Context) boundarySecrets {
 	return boundarySecrets{pool: c.config.Password, statement: querySecretsFrom(ctx)}
 }
 
-// safeRows projects the errors pgx reports after Query returns. Scan and Err
-// run once the statement's context is gone, so the secrets are bound here.
+// safeRows projects the errors pgx reports after Query returns. Scan, Values,
+// and Err run once the statement's context is gone, so secrets are bound here.
 type safeRows struct {
-	pgx.Rows
+	Rows
 	secrets boundarySecrets
 }
 
@@ -154,6 +166,11 @@ func (r safeRows) Scan(dest ...any) error {
 
 func (r safeRows) Err() error {
 	return projectError("reading rows", r.Rows.Err(), r.secrets)
+}
+
+func (r safeRows) Values() ([]any, error) {
+	values, err := r.Rows.Values()
+	return values, projectError("reading row values", err, r.secrets)
 }
 
 // safeRow projects the error QueryRow defers until Scan.

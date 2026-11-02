@@ -593,7 +593,7 @@ func (t *cleanupPG) Exec(_ context.Context, query string, _ ...any) (pgconn.Comm
 	return pgconn.CommandTag{}, nil
 }
 
-func (t *cleanupPG) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (t *cleanupPG) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, fmt.Errorf("unexpected Query")
 }
 
@@ -694,7 +694,7 @@ func (p *extensionProvisionPG) Exec(_ context.Context, query string, _ ...any) (
 	return pgconn.CommandTag{}, nil
 }
 
-func (p *extensionProvisionPG) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (p *extensionProvisionPG) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, fmt.Errorf("unexpected Query")
 }
 

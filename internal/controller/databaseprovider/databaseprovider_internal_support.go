@@ -36,8 +36,8 @@ import (
 	dbcontroller "github.com/opendatahub-io/opendatahub-db-operator/pkg/controller"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
 	pginstance "github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres/instance"
-	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/resources/gvk"
+	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 var errInternalAdminCredentialsLost = errors.New("internal admin credentials lost")

@@ -677,7 +677,7 @@ func (c *fakePostgresClient) Ping(context.Context) error {
 func (c *fakePostgresClient) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil
 }
-func (c *fakePostgresClient) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (c *fakePostgresClient) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, errors.New("unexpected query")
 }
 func (c *fakePostgresClient) QueryRow(context.Context, string, ...any) (pgx.Row, error) {

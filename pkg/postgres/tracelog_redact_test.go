@@ -517,7 +517,7 @@ func (c *recordingExecClient) Exec(
 	return pgconn.CommandTag{}, nil
 }
 
-func (c *recordingExecClient) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (c *recordingExecClient) Query(context.Context, string, ...any) (Rows, error) {
 	return nil, nil
 }
 

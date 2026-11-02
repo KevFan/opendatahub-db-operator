@@ -742,7 +742,7 @@ func (t *trackingClient) Exec(_ context.Context, query string, _ ...any) (pgconn
 	return pgconn.CommandTag{}, nil
 }
 
-func (t *trackingClient) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (t *trackingClient) Query(context.Context, string, ...any) (postgres.Rows, error) {
 	return nil, fmt.Errorf("unexpected Query")
 }
 
