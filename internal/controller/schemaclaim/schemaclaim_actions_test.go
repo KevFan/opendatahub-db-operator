@@ -46,6 +46,7 @@ import (
 	dbcontroller "github.com/opendatahub-io/opendatahub-db-operator/pkg/controller"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/controller/claimerrors"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
+	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func TestProvisionAction_PersistsProviderBindingBeforeEnsure(t *testing.T) {
@@ -318,7 +319,7 @@ func TestCleanupAction_DeletesStampedSecretWithStrippedOwnerRef(t *testing.T) {
 	}}
 	// No controller ownerRef: the credential stamp is the only proof this
 	// Secret is the claim's, and it must be enough for cleanup to delete it.
-	dbcontroller.ApplySchemaClaimCredentials(credSecret, postgres.Config{}, role, "pw", "analytics", "app_claim", claim.UID)
+	dbcontroller.ApplySchemaClaimCredentials(credSecret, postgres.Config{}, role, secretvalue.FromString("pw"), "analytics", "app_claim", claim.UID)
 	cli := fakeCleanupClient(t, provider, adminSecret, claim, credSecret)
 
 	err := newCleanupController(&cleanupPG{databases: map[string]bool{"analytics": true}}).cleanupAction(
@@ -349,7 +350,7 @@ func TestCleanupAction_SkipsForeignOwnedSecretWithForgedStamp(t *testing.T) {
 			Controller: &controller,
 		}},
 	}}
-	dbcontroller.ApplySchemaClaimCredentials(credSecret, postgres.Config{}, role, "forged-pw", "analytics", "app_claim", claim.UID)
+	dbcontroller.ApplySchemaClaimCredentials(credSecret, postgres.Config{}, role, secretvalue.FromString("forged-pw"), "analytics", "app_claim", claim.UID)
 	cli := fakeCleanupClient(t, provider, adminSecret, claim, credSecret)
 
 	err := newCleanupController(&cleanupPG{databases: map[string]bool{"analytics": true}}).cleanupAction(

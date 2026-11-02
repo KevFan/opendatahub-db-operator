@@ -42,6 +42,7 @@ import (
 	dbcontroller "github.com/opendatahub-io/opendatahub-db-operator/pkg/controller"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/controller/claimerrors"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
+	secretvalue "github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func TestEnsure_CreatesSchemaRoleAndSecret(t *testing.T) {
@@ -154,7 +155,7 @@ func TestEnsure_RotatesTamperedPassword(t *testing.T) {
 	}
 	secretName := dbcontroller.SecretNameForSchemaClaim(claim)
 	existing := credentialsSecretOwnedBy(t, secretName, claim.Namespace, claim)
-	dbcontroller.ApplySchemaClaimCredentials(existing, providerConfig(), role, "original-pw", "analytics", "app_claim", claim.UID)
+	dbcontroller.ApplySchemaClaimCredentials(existing, providerConfig(), role, secretvalue.FromString("original-pw"), "analytics", "app_claim", claim.UID)
 	existing.Data[postgres.SecretKeyPassword] = []byte("tampered-pw")
 
 	secret, err := ensure(t, claim, internalProvider(), pg, existing)

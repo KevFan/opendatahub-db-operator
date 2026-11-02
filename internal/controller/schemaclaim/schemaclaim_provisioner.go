@@ -124,13 +124,13 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 		if err != nil {
 			return nil, fmt.Errorf("generating password: %w", err)
 		}
-		if err := postgres.EnsureRole(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
+		if err := postgres.EnsureRole(ctx, p.Postgres, role, pw); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("creating role", err)
 		}
 		// EnsureRole is create-only: a concurrent create that loses on
 		// DuplicateObject leaves the winner's password on the role. Force the
 		// role to this reconcile's password so the Secret cannot diverge.
-		if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
+		if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("setting role password", err)
 		}
 		dbcontroller.ApplySchemaClaimCredentials(secret, p.ProviderConfig, role, pw, database, schema, p.Claim.UID)
@@ -140,7 +140,7 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 		if err != nil {
 			return nil, fmt.Errorf("generating password: %w", err)
 		}
-		if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
+		if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
 			return nil, dbcontroller.WrapQuickRetry("rotating role password", err)
 		}
 		dbcontroller.ApplySchemaClaimCredentials(secret, p.ProviderConfig, role, pw, database, schema, p.Claim.UID)
@@ -149,14 +149,14 @@ func (p SchemaProvisioner) Ensure(ctx context.Context) (*corev1.Secret, error) {
 		// Keep a verifiable password; rotate anything else. The stamp rules
 		// and the upgrade-migration trade-off are documented in
 		// DatabaseProvisioner.Ensure.
-		existingPassword := string(secret.Data[postgres.SecretKeyPassword])
-		if existingPassword == "" || (dbcontroller.HasCredentialStamp(secret) &&
+		existingPassword := odhsecret.FromBytes(secret.Data[postgres.SecretKeyPassword])
+		if existingPassword.IsZero() || (dbcontroller.HasCredentialStamp(secret) &&
 			!dbcontroller.CredentialStampMatches(secret, p.Claim.UID, role)) {
 			pw, genErr := postgres.GeneratePassword(24)
 			if genErr != nil {
 				return nil, fmt.Errorf("generating password: %w", genErr)
 			}
-			if err := postgres.SetRolePassword(ctx, p.Postgres, role, odhsecret.FromString(pw)); err != nil {
+			if err := postgres.SetRolePassword(ctx, p.Postgres, role, pw); err != nil {
 				return nil, dbcontroller.WrapQuickRetry("rotating role password", err)
 			}
 			existingPassword = pw

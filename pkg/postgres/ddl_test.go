@@ -24,7 +24,6 @@ import (
 
 	infraApi "github.com/opendatahub-io/opendatahub-db-operator/api/infrastructure/v1alpha1"
 	"github.com/opendatahub-io/opendatahub-db-operator/pkg/postgres"
-	"github.com/opendatahub-io/opendatahub-db-operator/pkg/secret"
 )
 
 func openPool(t *testing.T, cfg postgres.Config) postgres.Client {
@@ -88,13 +87,13 @@ func TestDDL_EnsureDropRole(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Idempotent create
-	g.Expect(postgres.EnsureRole(ctx, pool, "testrole", secret.FromString(pw))).To(Succeed())
-	g.Expect(postgres.EnsureRole(ctx, pool, "testrole", secret.FromString(pw))).To(Succeed())
+	g.Expect(postgres.EnsureRole(ctx, pool, "testrole", pw)).To(Succeed())
+	g.Expect(postgres.EnsureRole(ctx, pool, "testrole", pw)).To(Succeed())
 
 	// Verify the role can actually connect
 	roleCfg := postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: "testrole", Password: secret.FromString(pw), DBName: cfg.DBName,
+		User: "testrole", Password: pw, DBName: cfg.DBName,
 	}
 	roleClient := openPool(t, roleCfg)
 	g.Expect(roleClient.Ping(ctx)).To(Succeed())
@@ -122,12 +121,12 @@ func TestDDL_ClaimCleanupDropsRoleWithOwnedObjects(t *testing.T) {
 	pw, err := postgres.GeneratePassword(24)
 	g.Expect(err).NotTo(HaveOccurred())
 	role := "owned_obj_role"
-	g.Expect(postgres.EnsureRole(ctx, admin, role, secret.FromString(pw))).To(Succeed())
+	g.Expect(postgres.EnsureRole(ctx, admin, role, pw)).To(Succeed())
 	g.Expect(postgres.GrantDatabasePrivileges(ctx, admin, cfg.DBName, role, infraApi.AccessModeReadWrite)).To(Succeed())
 
 	roleCfg := postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
+		User: role, Password: pw, DBName: cfg.DBName,
 	}
 	roleClient := openPool(t, roleCfg)
 	_, err = roleClient.Exec(ctx, fmt.Sprintf("CREATE SCHEMA %s", postgres.QuoteIdentifier("owned_schema")))
@@ -162,12 +161,12 @@ func TestDDL_DropRoleTerminatesActiveSessions(t *testing.T) {
 	pw, err := postgres.GeneratePassword(24)
 	g.Expect(err).NotTo(HaveOccurred())
 	role := "live_session_role"
-	g.Expect(postgres.EnsureRole(ctx, admin, role, secret.FromString(pw))).To(Succeed())
+	g.Expect(postgres.EnsureRole(ctx, admin, role, pw)).To(Succeed())
 	g.Expect(postgres.GrantDatabasePrivileges(ctx, admin, cfg.DBName, role, infraApi.AccessModeReadWrite)).To(Succeed())
 
 	live := openPool(t, postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
+		User: role, Password: pw, DBName: cfg.DBName,
 	})
 	g.Expect(live.Ping(ctx)).To(Succeed())
 
@@ -196,12 +195,12 @@ func TestDDL_DropDatabaseWithActiveSession(t *testing.T) {
 	pw, err := postgres.GeneratePassword(24)
 	g.Expect(err).NotTo(HaveOccurred())
 	role := "claim_drop_db_role"
-	g.Expect(postgres.EnsureRole(ctx, admin, role, secret.FromString(pw))).To(Succeed())
+	g.Expect(postgres.EnsureRole(ctx, admin, role, pw)).To(Succeed())
 	g.Expect(postgres.GrantDatabasePrivileges(ctx, admin, dbName, role, infraApi.AccessModeReadWrite)).To(Succeed())
 
 	live := openPool(t, postgres.Config{
 		Host: cfg.Host, Port: cfg.Port,
-		User: role, Password: secret.FromString(pw), DBName: dbName,
+		User: role, Password: pw, DBName: dbName,
 	})
 	g.Expect(live.Ping(ctx)).To(Succeed())
 
@@ -252,13 +251,13 @@ func TestDDL_GrantSchemaPrivileges(t *testing.T) {
 			))
 			g.Expect(err).NotTo(HaveOccurred())
 
-			g.Expect(postgres.EnsureRole(ctx, pool, role, secret.FromString(pw))).To(Succeed())
+			g.Expect(postgres.EnsureRole(ctx, pool, role, pw)).To(Succeed())
 			g.Expect(postgres.GrantSchemaPrivileges(ctx, pool, schema, role, tc.accessMode)).To(Succeed())
 			t.Cleanup(func() { _ = postgres.DropRole(ctx, pool, role) })
 
 			roleCfg := postgres.Config{
 				Host: cfg.Host, Port: cfg.Port,
-				User: role, Password: secret.FromString(pw), DBName: cfg.DBName,
+				User: role, Password: pw, DBName: cfg.DBName,
 			}
 			rolePool, err := postgres.NewClient(ctx, roleCfg)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -325,7 +324,7 @@ func TestDDL_GrantDatabasePrivileges(t *testing.T) {
 			password, err := postgres.GeneratePassword(24)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			g.Expect(postgres.EnsureRole(ctx, pool, role, secret.FromString(password))).To(Succeed())
+			g.Expect(postgres.EnsureRole(ctx, pool, role, password)).To(Succeed())
 			g.Expect(postgres.GrantDatabasePrivileges(ctx, pool, cfg.DBName, role, tc.accessMode)).To(Succeed())
 			t.Cleanup(func() { _ = postgres.DropRole(ctx, pool, role) })
 
@@ -333,7 +332,7 @@ func TestDDL_GrantDatabasePrivileges(t *testing.T) {
 				Host:     cfg.Host,
 				Port:     cfg.Port,
 				User:     role,
-				Password: secret.FromString(password),
+				Password: password,
 				DBName:   cfg.DBName,
 			}
 			rolePool, err := postgres.NewClient(ctx, roleCfg)

@@ -72,6 +72,13 @@ var allowedRevealSites = []revealSite{
 	{file: "pkg/postgres/ddl.go", function: "SetRolePassword"},
 	// Redaction needs the raw value to build every rendering it scrubs.
 	{file: "pkg/postgres/tracelog_redact.go", function: "newTraceRedactor"},
+	// The Kubernetes Secret write for claim credentials needs plaintext for
+	// the data keys and the credential stamp.
+	{file: "pkg/controller/claimsecret.go", function: "ApplyClaimCredentials"},
+	// Stamp verification hashes the stored Secret content.
+	{file: "pkg/controller/claimsecret.go", function: "CredentialStampMatches"},
+	// The Kubernetes Secret write for the internal admin instance.
+	{file: "pkg/postgres/instance/connection.go", function: "AdminSecret"},
 }
 
 // TestRevealCallSitesMatchAllowlist makes the Reveal boundary a CI gate: the

@@ -368,7 +368,7 @@ func TestCleanupAction_DeletesStampedSecretWithStrippedOwnerRef(t *testing.T) {
 		Name:      dbcontroller.SecretNameForDatabaseClaim(claim),
 		Namespace: claim.Namespace,
 	}}
-	dbcontroller.ApplyClaimCredentials(credSecret, postgres.Config{}, role, "pw", "analytics", claim.UID)
+	dbcontroller.ApplyClaimCredentials(credSecret, postgres.Config{}, role, secretvalue.FromString("pw"), "analytics", claim.UID)
 	cli := fakeCleanupClient(t, provider, adminSecret, claim, credSecret)
 
 	err := newCleanupController(&cleanupPG{databases: map[string]bool{"analytics": true}}).cleanupAction(
@@ -403,7 +403,7 @@ func TestCleanupAction_SkipsForeignOwnedSecretWithForgedStamp(t *testing.T) {
 			Controller: &controller,
 		}},
 	}}
-	dbcontroller.ApplyClaimCredentials(credSecret, postgres.Config{}, role, "forged-pw", "analytics", claim.UID)
+	dbcontroller.ApplyClaimCredentials(credSecret, postgres.Config{}, role, secretvalue.FromString("forged-pw"), "analytics", claim.UID)
 	cli := fakeCleanupClient(t, provider, adminSecret, claim, credSecret)
 
 	err := newCleanupController(&cleanupPG{databases: map[string]bool{"analytics": true}}).cleanupAction(
