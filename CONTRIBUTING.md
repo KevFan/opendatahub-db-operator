@@ -63,9 +63,9 @@ The suite needs exclusive use of the cluster-scoped `DatabaseService/default-db-
 not reuse or delete an existing instance.
 
 `make test-e2e-providers` requires the context `kind-$(KIND_CLUSTER)` and does not create the Kind
-cluster. Set `E2E_CERT_MANAGER_PROFILE=present` for a cluster with cert-manager, or `absent` for a
-cluster without it. Set up a disposable External PostgreSQL instance and its administrator Secret,
-then run the suite, for example:
+cluster (use `make kind-create` first). Set `E2E_CERT_MANAGER_PROFILE=present` for a cluster with
+cert-manager, or `absent` for a cluster without it. Set up a disposable External PostgreSQL instance
+and its administrator Secret, then run the suite, for example:
 
 ```sh
 bash test/e2e/scripts/setup-external-postgres.sh db-operator-dev

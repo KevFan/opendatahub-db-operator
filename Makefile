@@ -81,6 +81,14 @@ kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
 
+.PHONY: kind-create
+kind-create: kind ## Create the dev Kind cluster the e2e/integration targets expect.
+	$(KIND) create cluster --name "$(KIND_CLUSTER)" --wait 5m
+
+.PHONY: kind-delete
+kind-delete: kind ## Delete the dev Kind cluster.
+	$(KIND) delete cluster --name "$(KIND_CLUSTER)"
+
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
 $(ENVTEST): $(LOCALBIN)
@@ -95,6 +103,10 @@ ENVTEST_K8S_VERSION ?= 1.31.0
 all: build
 
 ##@ General
+
+.PHONY: print-kind-version
+print-kind-version: ## Print the pinned kind version (for CI).
+	@echo $(KIND_VERSION)
 
 .PHONY: print-cert-manager-version
 print-cert-manager-version: ## Print the pinned cert-manager chart version (for CI).
@@ -116,7 +128,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 
 .PHONY: fmt
 fmt: golangci-lint ## Run golangci-lint formatters against code.
-	$(GOLANGCI_LINT) fmt
+	GOTOOLCHAIN=go$(GO_VERSION) $(GOLANGCI_LINT) fmt
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -129,11 +141,14 @@ deps: ## Tidy and verify Go module dependencies.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter.
-	$(GOLANGCI_LINT) run
+	# GOTOOLCHAIN pins the go command golangci-lint shells out to, to the go.mod
+	# version: a newer local go feeds it dependency files built for go1.27+ that
+	# its embedded typechecker (built with go.mod's version) cannot load.
+	GOTOOLCHAIN=go$(GO_VERSION) $(GOLANGCI_LINT) run
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes.
-	$(GOLANGCI_LINT) run --fix
+	GOTOOLCHAIN=go$(GO_VERSION) $(GOLANGCI_LINT) run --fix
 
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration.
@@ -173,7 +188,7 @@ test-integration-run: ## Run integration tests against the current kubeconfig co
 test-integration: test-integration-setup test-integration-run ## Set up and run integration tests.
 
 .PHONY: test-e2e-setup
-test-e2e-setup: test-e2e-context-check ## Install cert-manager when needed, build/load the manager image, and install the Helm chart into Kind.
+test-e2e-setup: test-e2e-context-check helm-tool ## Install cert-manager when needed, build/load the manager image, and install the Helm chart into Kind.
 	@if [ "$(E2E_CERT_MANAGER_PROFILE)" != absent ]; then $(MAKE) test-e2e-cert-manager; fi
 	$(KUBECTL) get --raw=/readyz >/dev/null
 	$(MAKE) test-e2e-teardown
@@ -247,7 +262,7 @@ test-e2e-run: test-e2e-context-check ## Verify the Helm-deployed manager reconci
 		go test ./test/e2e/... -v -timeout 20m
 
 .PHONY: test-e2e-teardown
-test-e2e-teardown: test-e2e-context-check ## Remove the e2e DatabaseService, Helm release, and namespace.
+test-e2e-teardown: test-e2e-context-check helm-tool ## Remove the e2e DatabaseService, Helm release, and namespace.
 	@cleanup_status=0; \
 	if $(KUBECTL) get crd databaseservices.services.platform.opendatahub.io >/dev/null 2>&1; then \
 		$(KUBECTL) delete databaseservice default-db-operator --ignore-not-found --wait || cleanup_status=$$?; \
@@ -277,7 +292,7 @@ test-e2e-cert-manager: test-e2e-context-check ## Install cert-manager into the K
 			"https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml"; then \
 			exit 1; \
 		fi; \
-		if ! printf '%s  %s\n' "$(CERT_MANAGER_SHA256)" "$$manifest" | sha256sum --check --status; then \
+		if ! printf '%s  %s\n' "$(CERT_MANAGER_SHA256)" "$$manifest" | shasum -a 256 --check --status; then \
 			echo "cert-manager manifest digest mismatch for $(CERT_MANAGER_VERSION)" >&2; \
 			exit 1; \
 		fi; \
