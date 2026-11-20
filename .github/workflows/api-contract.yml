@@ -1,0 +1,45 @@
+name: API contract
+
+# CRD compatibility and coverage checks from red-hat-data-services/api-contract-tests.
+# The reusable workflows are pinned to @latest (v2.2.0 as of 2026-11-20); see
+# docs/releasing.md in that repository for the other pinning choices. Never pin
+# to a branch.
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  crd-contract:
+    uses: red-hat-data-services/api-contract-tests/.github/workflows/provider-crd-check.yml@latest
+    with:
+      # Covers the four CRDs in config/crd/bases/ plus the identical embedded
+      # copies in internal/controller/databaseservice/operands/manifests/ (the
+      # check fails if those copies diverge from the bases). The Helm chart
+      # copy under config/chart/crds/ is excluded in the coverage job below.
+      crd-glob: '*opendatahub.io_*.yaml'
+      # Merge base of rhoai-3.6 and main (the RHOAI 3.6 release base), from
+      # release_baseline.py lookup on 2026-11-20; derived from release commit
+      # c4a888b576b33d7ca9b2da5e95b6109ca25bea60 (rhoai-3.6 in
+      # red-hat-data-services/rhai-db-operator).
+      baseline-refs: '4c799d275bf186db83a69c57fa925d94d382bd96'
+      mode: enforce
+
+  api-contract-coverage:
+    uses: red-hat-data-services/api-contract-tests/.github/workflows/provider-coverage-check.yml@latest
+    with:
+      crd-globs: '*opendatahub.io_*.yaml'
+      # Helm chart copy of the DatabaseService CRD, generated from the
+      # kustomize bundle; the CRD check compares the canonical copy in
+      # config/crd/bases/.
+      crd-exclude-globs: 'config/chart/crds/*.yaml'
+      # Same baseline as the CRD check: merge base of rhoai-3.6 and main.
+      baseline-refs: '4c799d275bf186db83a69c57fa925d94d382bd96'
+      yq-version: "4.45.1"
+      mode: enforce
