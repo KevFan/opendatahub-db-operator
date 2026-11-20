@@ -1,0 +1,4 @@
+# The contract checks' configuration (baseline SHA, globs, mode) is what keeps
+# them honest: changes need an owner's review. See the onboarding checklist,
+# step 7, in red-hat-data-services/api-contract-tests docs/onboarding/README.md.
+/.github/workflows/api-contract.yml @opendatahub-io/opendatahub-db-operator-members
