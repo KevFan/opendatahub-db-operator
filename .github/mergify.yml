@@ -22,6 +22,9 @@ shared:
     - check-success = Envtest Reconciler Suite
     - check-success = semgrep-tls
     - check-success = tls-lint
+    # API contract checks run on every pull request, including docs-only ones.
+    - check-success = crd-contract / check
+    - check-success = api-contract-coverage / coverage
   conditional_checks: &conditional-checks
     # E2E and the Konflux build do not run for documentation-only pull requests.
     - -check-failure = Cert-manager present
