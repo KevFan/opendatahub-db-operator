@@ -12,11 +12,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   crd-contract:
+    permissions:
+      contents: read
     uses: red-hat-data-services/api-contract-tests/.github/workflows/provider-crd-check.yml@latest
     with:
       # Covers the four CRDs in config/crd/bases/ plus the identical embedded
@@ -32,6 +31,8 @@ jobs:
       mode: enforce
 
   api-contract-coverage:
+    permissions:
+      contents: read
     uses: red-hat-data-services/api-contract-tests/.github/workflows/provider-coverage-check.yml@latest
     with:
       crd-globs: '*opendatahub.io_*.yaml'
